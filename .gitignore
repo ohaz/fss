@@ -33,6 +33,10 @@
 
 # Scons
 .sconsign.dblite
+.sconf_temp/
+config.log
+
+# Others
 build/
 test/
 .vscode/

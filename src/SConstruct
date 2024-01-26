@@ -1,1 +1,14 @@
-Program('fss.cpp', LIBS=['boost_program_options', 'boost_filesystem'])
+Program(['fss.cpp', 'hash.cpp'],
+        LIBS = [
+            'boost_program_options',
+            'boost_filesystem',
+            'crypto++'
+        ],
+        CPPPATH = [
+            '/usr/lib',
+            '/usr/local/lib',
+            '/usr/include',
+            '/usr/include/crypto++',
+            '/usr/include/cryptopp'
+        ]
+)
