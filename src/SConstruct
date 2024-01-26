@@ -9,6 +9,7 @@ Program(['fss.cpp', 'hash.cpp'],
             '/usr/local/lib',
             '/usr/include',
             '/usr/include/crypto++',
-            '/usr/include/cryptopp'
+            '/usr/include/cryptopp',
+            '/usr/include/nlohmann'
         ]
 )

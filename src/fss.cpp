@@ -2,6 +2,7 @@
 #include <fstream>
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
+#include <nlohmann/json.hpp>
 #include "hash.h"
 
 namespace po = boost::program_options;
@@ -59,18 +60,70 @@ namespace fss {
         return listFiles(objectsPath());
     }
 
+    boost::filesystem::path stagingPath() {
+        boost::filesystem::path full_path(boost::filesystem::current_path());
+        full_path /= ".fss";
+        full_path /= "staging";
+        return full_path;
+    }
+
+    std::vector<boost::filesystem::path> listStaging() {
+        return listFiles(stagingPath());
+    }
+
+    boost::filesystem::path commitFile(boost::filesystem::path path) {
+        boost::filesystem::path commitFilePath = path / ".__fss__commit.json";
+        return commitFilePath;
+    }
+
+    boost::filesystem::path createCommitFile(boost::filesystem::path path) {
+        auto j2 = R"(
+            {
+                "files": [],
+                "meta": {
+                    "message": ""
+                }
+            }
+            )"_json;
+        std::string jsontext = j2.dump();
+
+        std::ofstream commitFileStream;
+
+        boost::filesystem::path commitFilePath = commitFile(path);
+        
+        if (!boost::filesystem::exists(commitFilePath)) {
+            commitFileStream.open(commitFilePath, std::ofstream::out | std::ofstream::trunc);
+            commitFileStream << jsontext << std::endl;
+            commitFileStream.close();
+        }
+        return commitFilePath;
+    }
+
     void addFile(boost::filesystem::path file) {
         std::string hash = createHash(file);
         bool found = false;
-        for (auto path: listObjects()) {
+        for (auto path: listStaging()) {
             if (path.filename() == hash) {
                 found = true;
             }
         }
         if (!found) {
-            boost::filesystem::copy_file(file, objectsPath() / hash);
+            boost::filesystem::copy_file(file, stagingPath() / hash);
         }
-        
+        auto commitFilePath = createCommitFile(stagingPath());
+
+        std::ifstream inputStream(commitFilePath);
+        nlohmann::json json;
+        inputStream >> json;
+        inputStream.close();
+        auto newElement = nlohmann::json::object();
+        newElement["type"] = "file";
+        newElement["name"] = file.filename().string();
+        newElement["hash"] = hash;
+        json["files"].push_back(newElement);
+
+        std::ofstream outputStream(commitFilePath, std::ofstream::out | std::ofstream::trunc);
+        outputStream << std::setw(4) << json << std::endl;
     }
 
     void addFile(std::string file) {
@@ -104,8 +157,9 @@ namespace fss {
         createFolder(objects.append("objects"));
         boost::filesystem::path trees = full_path;
         createFolder(trees.append("trees"));
+        boost::filesystem::path staging = full_path;
+        createFolder(staging.append("staging"));
     }
-
 }
 
 
