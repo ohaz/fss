@@ -13,6 +13,47 @@ namespace fss {
         return boost::filesystem::current_path();
     }
 
+    boost::filesystem::path headPath() {
+        boost::filesystem::path full_path(boost::filesystem::current_path());
+        full_path /= ".fss";
+        full_path /= "HEAD";
+        return full_path;
+    }
+
+    boost::filesystem::path treesPath() {
+        boost::filesystem::path full_path(boost::filesystem::current_path());
+        full_path /= ".fss";
+        full_path /= "trees";
+        return full_path;
+    }
+
+    boost::filesystem::path objectsPath() {
+        boost::filesystem::path full_path(boost::filesystem::current_path());
+        full_path /= ".fss";
+        full_path /= "objects";
+        return full_path;
+    }
+
+    boost::filesystem::path currentBranchFile() {
+        std::ifstream inputStream(headPath());
+        std::string data;
+        inputStream >> data;
+        inputStream.close();
+        boost::filesystem::path headFile(boost::filesystem::current_path());
+        headFile /= ".fss";
+        headFile /= data;
+        return headFile;
+    }
+
+    std::string currentParent() {
+        auto headFile = currentBranchFile();
+        std::ifstream inputStream(headFile);
+        std::string hash;
+        inputStream >> hash;
+        inputStream.close();
+        return hash;
+    }
+
     void createFolder(boost::filesystem::path path) {
         if (!boost::filesystem::exists(path)) {
             boost::filesystem::create_directories(path);
@@ -26,9 +67,8 @@ namespace fss {
 
     void writeHEAD(const boost::filesystem::path basePath, std::string type, std::string ref) {
         std::ofstream HEADfile;
-        boost::filesystem::path tempPath = basePath;
-        HEADfile.open(tempPath /= "HEAD", std::ofstream::out | std::ofstream::trunc);
-        HEADfile << type << ": " << ref;
+        HEADfile.open(headPath(), std::ofstream::out | std::ofstream::trunc);
+        HEADfile << type << ref;
         HEADfile.close();
     }
 
@@ -47,13 +87,6 @@ namespace fss {
             }
         }
         return paths;
-    }
-
-    boost::filesystem::path objectsPath() {
-        boost::filesystem::path full_path(boost::filesystem::current_path());
-        full_path /= ".fss";
-        full_path /= "objects";
-        return full_path;
     }
 
     std::vector<boost::filesystem::path> listObjects() {
@@ -81,7 +114,8 @@ namespace fss {
             {
                 "files": [],
                 "meta": {
-                    "message": ""
+                    "message": "",
+                    "parent": ""
                 }
             }
             )"_json;
@@ -130,6 +164,37 @@ namespace fss {
         addFile(workingDirectory() / file);
     }
 
+    void updateBranch(std::string commitHash) {
+        auto branchFile = currentBranchFile();
+        std::ofstream HEADfile;
+        HEADfile.open(branchFile, std::ofstream::out | std::ofstream::trunc);
+        HEADfile << commitHash;
+        HEADfile.close();
+    }
+
+    void commit(std::string message) {
+        auto commitFilePath = createCommitFile(stagingPath());
+        std::ifstream inputStream(commitFilePath);
+        nlohmann::json json;
+        inputStream >> json;
+        inputStream.close();
+        json["meta"]["message"] = message;
+        json["meta"]["parent"] = currentParent();
+
+        std::ofstream outputStream(commitFilePath, std::ofstream::out | std::ofstream::trunc);
+        outputStream << std::setw(4) << json << std::endl;
+        outputStream.close();
+
+        std::string commitHash = createHash(commitFilePath);
+        boost::filesystem::copy_file(commitFilePath, treesPath() / commitHash);
+        boost::filesystem::remove(commitFilePath);
+        for (auto fileName: listFiles(stagingPath())) {
+            boost::filesystem::copy_file(fileName, objectsPath() / fileName.filename().string());
+            boost::filesystem::remove(fileName);
+        }
+        updateBranch(commitHash);
+    }
+
     void createBranch(const boost::filesystem::path basePath, std::string name) {
         boost::filesystem::path branches = basePath;
         branches /= "refs";
@@ -142,6 +207,7 @@ namespace fss {
         HEADfile.close();
     }
 
+
     void init(const po::variables_map& vm) {
         boost::filesystem::path full_path = workingDirectory();
         boost::filesystem::path base_path = full_path;
@@ -152,7 +218,7 @@ namespace fss {
         std::cout << "Initialising in " << base_path << std::endl;
         createFolder(full_path);
         createBranch(full_path, "main");
-        writeHEAD(full_path, "ref", "refs/heads/main");
+        writeHEAD(full_path, "", "refs/heads/main");
         boost::filesystem::path objects = full_path;
         createFolder(objects.append("objects"));
         boost::filesystem::path trees = full_path;
@@ -170,10 +236,10 @@ int main(int argc, char* argv[]) {
         desc.add_options()
             ("help,h", "Help")
             ("command", po::value<std::string>(), "Command")
-            ("file", po::value<std::string>(), "file");
+            ("params", po::value<std::string>(), "Parameters");
         po::positional_options_description pos_desc;
         pos_desc.add("command", 1);
-        pos_desc.add("file", 1);
+        pos_desc.add("params", -1);
         po::command_line_parser parser{argc, argv};
         parser.options(desc).positional(pos_desc).allow_unregistered();
         po::parsed_options parsed_options = parser.run();
@@ -191,7 +257,9 @@ int main(int argc, char* argv[]) {
         if (command == "init"){
             fss::init(&vm);
         } else if (command == "add") {
-            fss::addFile(vm["file"].as<std::string>());
+            fss::addFile(vm["params"].as<std::string>());
+        } else if (command == "commit") {
+            fss::commit(vm["params"].as<std::string>());
         } else {
             std::cerr << "Unknown command" << std::endl;
         }        
