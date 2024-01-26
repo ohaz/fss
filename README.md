@@ -44,7 +44,7 @@ Where `<filename>` is the name of the file you want to add.
 To create a new commit, be in a directory under `fss` version control and run:
 
 ```bash
-fss commit This_is_a_commit_message
+fss commit "This is a commit message"
 ```
 
-At the moment the commit message has to be a single word (no spaces).
+Commit messages containing spaces have to be surrounded by `"`.
