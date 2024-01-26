@@ -1,6 +1,6 @@
 # FSS
 
-FSS is a tool that mirrors parts of `git`.
+FSS is a tool that mirrors some of `git`'s features.
 
 It's mainly meant as training for me to understand the concepts behind `git` better and to learn C++.
 This is by no means clean code and it's also untested. It also doesn't support all `git` commands.
